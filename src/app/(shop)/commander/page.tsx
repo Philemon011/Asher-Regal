@@ -2,14 +2,17 @@ import type { Metadata } from "next";
 import { CartBar } from "@/components/shop/cart-bar";
 import { CheckoutProgress } from "@/components/shop/checkout-progress";
 import { ProductGrid } from "@/components/shop/product-grid";
-import { getCatalog } from "@/lib/catalog.server";
+import { getCatalog, getCategories } from "@/lib/catalog.server";
 
 export const metadata: Metadata = {
   title: "Choisissez vos gâteaux",
 };
 
 export default async function OrderPage() {
-  const products = await getCatalog();
+  const [products, categories] = await Promise.all([
+    getCatalog(),
+    getCategories(),
+  ]);
 
   return (
     <section className="px-5 pb-32 pt-10 sm:px-8 sm:pt-16">
@@ -21,8 +24,8 @@ export default async function OrderPage() {
             Choisissez vos gâteaux
           </h1>
           <p className="mx-auto mt-4 max-w-md text-ink-soft">
-            Touchez « Choisir » sur vos préférés, ajustez les quantités, et on
-            s&apos;occupe du reste.
+            Touchez un gâteau pour le voir en grand, avec toutes ses photos.
+            Touchez « Choisir » pour l&apos;ajouter à votre commande.
           </p>
         </div>
 
@@ -31,7 +34,7 @@ export default async function OrderPage() {
             Notre sélection arrive bientôt. Repassez nous voir très vite !
           </p>
         ) : (
-          <ProductGrid products={products} />
+          <ProductGrid products={products} categories={categories} />
         )}
       </div>
 

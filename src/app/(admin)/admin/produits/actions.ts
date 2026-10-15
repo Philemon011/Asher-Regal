@@ -58,6 +58,14 @@ export async function createProduct(
 
     if (error?.code === "23505") continue; // adresse déjà prise
 
+        if (error?.message?.includes("photo_required")) {
+      return {
+        error:
+          "Ajoutez au moins une photo avant de publier ce produit. Créez-le d'abord en brouillon.",
+        values,
+      };
+    }
+
     if (error?.code === "23503") {
       return { error: "Cette catégorie n'existe plus.", values };
     }
@@ -107,6 +115,14 @@ export async function updateProduct(
     .select("id");
 
   if (error) {
+
+        if (error.message?.includes("photo_required")) {
+      return {
+        error: "Ajoutez au moins une photo avant de publier ce produit.",
+        values,
+      };
+    }
+
     if (error.code === "23503") {
       return { error: "Cette catégorie n'existe plus.", values };
     }
@@ -143,7 +159,10 @@ export async function toggleProduct(formData: FormData) {
     .update({ [field]: value === "true" })
     .eq("id", productId);
 
-  if (error) {
+    if (error) {
+    if (error.message?.includes("photo_required")) {
+      redirect("/admin/produits?erreur=photo-requise");
+    }
     console.error("Bascule impossible :", error.code);
     return;
   }

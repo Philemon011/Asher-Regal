@@ -30,9 +30,9 @@ type FilterKey = (typeof FILTERS)[number]["key"];
 export default async function AdminProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ filtre?: string }>;
+    searchParams: Promise<{ filtre?: string; erreur?: string }>;
 }) {
-  const { filtre } = await searchParams;
+    const { filtre, erreur } = await searchParams;
   const filter: FilterKey = FILTERS.some((item) => item.key === filtre)
     ? (filtre as FilterKey)
     : "tous";
@@ -96,6 +96,15 @@ export default async function AdminProductsPage({
           Nouveau produit
         </Link>
       </div>
+
+            {erreur === "photo-requise" && (
+        <p
+          role="alert"
+          className="mt-6 rounded-2xl bg-red-50 p-4 text-sm text-red-800"
+        >
+          Ajoutez au moins une photo avant de publier ce produit.
+        </p>
+      )}
 
       <nav
         aria-label="Filtrer les produits"

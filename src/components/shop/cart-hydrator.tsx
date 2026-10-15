@@ -7,7 +7,7 @@ import { useCartStore } from "@/stores/cart-store";
 // pour que le serveur et le navigateur montrent la même chose au départ.
 export function CartHydrator() {
   useEffect(() => {
-    void useCartStore.persist.rehydrate();
+    void useCartStore.persist?.rehydrate();
   }, []);
 
   return null;

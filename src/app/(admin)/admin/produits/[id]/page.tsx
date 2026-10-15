@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
+import { DeleteProductPanel } from "@/components/admin/delete-product-panel";
 import { ProductForm } from "@/components/admin/product-form";
+import { ProductPhotos } from "@/components/admin/product-photos";
 import { requireAdmin } from "@/lib/auth/require-admin";
 
 export const metadata: Metadata = { title: "Modifier le produit" };
@@ -21,7 +22,12 @@ type ProductDetail = {
   position: number;
   is_published: boolean;
   is_available: boolean;
-  product_images: { storage_path: string; alt: string; position: number }[];
+  product_images: {
+    id: string;
+    storage_path: string;
+    alt: string;
+    position: number;
+  }[];
 };
 
 export default async function EditProductPage({
@@ -38,7 +44,7 @@ export default async function EditProductPage({
     supabase
       .from("products")
       .select(
-        "id, name, description, price, category_id, tint, position, is_published, is_available, product_images(storage_path, alt, position)"
+        "id, name, description, price, category_id, tint, position, is_published, is_available, product_images(id, storage_path, alt, position)"
       )
       .eq("id", id)
       .maybeSingle(),
@@ -58,7 +64,16 @@ export default async function EditProductPage({
   if (!product.data) notFound();
 
   const item = product.data as ProductDetail;
-  const images = [...item.product_images].sort((a, b) => a.position - b.position);
+
+  const photos = [...item.product_images]
+    .sort((a, b) => a.position - b.position)
+    .map((image) => ({
+      id: image.id,
+      alt: image.alt || item.name,
+      url: supabase.storage
+        .from("product-images")
+        .getPublicUrl(image.storage_path).data.publicUrl,
+    }));
 
   return (
     <div className="max-w-2xl">
@@ -90,6 +105,10 @@ export default async function EditProductPage({
 
       <div className="mt-8 space-y-6">
         <section className="rounded-3xl border border-line bg-surface p-6 sm:p-8">
+          <ProductPhotos productId={item.id} photos={photos} />
+        </section>
+
+        <section className="rounded-3xl border border-line bg-surface p-6 sm:p-8">
           <h2 className="text-lg font-semibold text-ink">Informations</h2>
           <div className="mt-6">
             <ProductForm
@@ -110,42 +129,7 @@ export default async function EditProductPage({
           </div>
         </section>
 
-        <section className="rounded-3xl border border-line bg-surface p-6 sm:p-8">
-          <h2 className="text-lg font-semibold text-ink">Photos</h2>
-          {images.length === 0 ? (
-            <p className="mt-3 text-sm text-ink-soft">
-              Aucune photo pour l&apos;instant. L&apos;ajout de photos arrive à
-              l&apos;étape suivante.
-            </p>
-          ) : (
-            <>
-              <ul className="mt-4 flex flex-wrap gap-3">
-                {images.map((image) => (
-                  <li
-                    key={image.storage_path}
-                    className="relative size-24 overflow-hidden rounded-2xl bg-rose/40"
-                  >
-                    <Image
-                      src={
-                        supabase.storage
-                          .from("product-images")
-                          .getPublicUrl(image.storage_path).data.publicUrl
-                      }
-                      alt={image.alt || item.name}
-                      fill
-                      sizes="96px"
-                      className="object-cover"
-                    />
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-4 text-xs text-ink-soft">
-                L&apos;ajout, l&apos;ordre et la suppression des photos arrivent à
-                l&apos;étape suivante.
-              </p>
-            </>
-          )}
-        </section>
+        <DeleteProductPanel productId={item.id} published={item.is_published} />
       </div>
     </div>
   );

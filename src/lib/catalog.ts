@@ -2,6 +2,8 @@ export type Tint = "rose" | "peach" | "lavender" | "sage" | "vanilla";
 
 export type ProductImage = { url: string; alt: string };
 
+export type Category = { id: string; name: string; slug: string };
+
 export type Product = {
   id: string;
   name: string;
@@ -10,6 +12,7 @@ export type Product = {
   price: number;
   available: boolean;
   tint: Tint;
+  categoryId: string | null;
   image: string | null;
   images: ProductImage[];
 };

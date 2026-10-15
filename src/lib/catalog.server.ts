@@ -1,7 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
-import type { Product, Tint } from "@/lib/catalog";
+import type { Category, Product, Tint } from "@/lib/catalog";
 
 type ProductRow = {
   id: string;
@@ -11,6 +11,7 @@ type ProductRow = {
   price: number;
   tint: string;
   is_available: boolean;
+  category_id: string | null;
   product_images: { storage_path: string; alt: string; position: number }[];
 };
 
@@ -21,7 +22,7 @@ export const getCatalog = cache(async (): Promise<Product[]> => {
   const { data, error } = await supabase
     .from("products")
     .select(
-      "id, name, slug, description, price, tint, is_available, product_images(storage_path, alt, position)"
+      "id, name, slug, description, price, tint, is_available, category_id, product_images(storage_path, alt, position)"
     )
     .eq("is_published", true)
     .order("position", { ascending: true })
@@ -53,8 +54,29 @@ export const getCatalog = cache(async (): Promise<Product[]> => {
       price: row.price,
       available: row.is_available,
       tint: row.tint as Tint,
+      categoryId: row.category_id,
       image: images[0]?.url ?? null,
       images,
     };
   });
+});
+
+// Catégories visibles dans la boutique. En cas de panne, on affiche simplement
+// le catalogue sans filtres : ce n'est pas bloquant.
+export const getCategories = cache(async (): Promise<Category[]> => {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("categories")
+    .select("id, name, slug")
+    .eq("is_active", true)
+    .order("position", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("Lecture des catégories impossible :", error.code);
+    return [];
+  }
+
+  return (data ?? []) as Category[];
 });

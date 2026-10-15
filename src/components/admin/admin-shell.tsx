@@ -32,7 +32,7 @@ const NAV: NavItem[] = [
   { href: "/admin", label: "Tableau de bord", icon: LayoutDashboard, ready: true },
   { href: "/admin/commandes", label: "Commandes", icon: ClipboardList, ready: true },
   { href: "/admin/produits", label: "Produits", icon: Cake, ready: true },
-  { href: "/admin/categories", label: "Catégories", icon: Tags, ready: false },
+  { href: "/admin/categories", label: "Catégories", icon: Tags, ready: true },
   { href: "/admin/clients", label: "Clients", icon: Users, ready: false },
   { href: "/admin/reclamations", label: "Réclamations", icon: LifeBuoy, ready: false },
   { href: "/admin/reglages", label: "Réglages", icon: Settings, ready: false },
