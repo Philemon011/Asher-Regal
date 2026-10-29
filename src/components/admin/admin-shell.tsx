@@ -14,6 +14,7 @@ import {
   Menu,
   Settings,
   Tags,
+  Truck,
   Users,
   X,
   type LucideIcon,
@@ -33,7 +34,8 @@ const NAV: NavItem[] = [
   { href: "/admin/commandes", label: "Commandes", icon: ClipboardList, ready: true },
   { href: "/admin/produits", label: "Produits", icon: Cake, ready: true },
   { href: "/admin/categories", label: "Catégories", icon: Tags, ready: true },
-  { href: "/admin/clients", label: "Clients", icon: Users, ready: false },
+  { href: "/admin/livraison", label: "Livraison", icon: Truck, ready: true },
+  { href: "/admin/clients", label: "Clients", icon: Users, ready: true },
   { href: "/admin/reclamations", label: "Réclamations", icon: LifeBuoy, ready: false },
   { href: "/admin/reglages", label: "Réglages", icon: Settings, ready: false },
 ];
@@ -42,7 +44,7 @@ function Brand() {
   return (
     <div className="px-3">
       <Link href="/admin" className="font-display text-2xl text-ink">
-        Pâtisserie
+        Asher Regal
       </Link>
       <p className="text-xs text-ink-soft">Administration</p>
     </div>

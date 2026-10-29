@@ -183,7 +183,17 @@ export default async function AdminOrderDetailPage({
           </section>
 
           <section className="rounded-3xl border border-line bg-surface p-6">
-            <h2 className="text-lg font-semibold text-ink">Client et réception</h2>
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold text-ink">
+                Client et réception
+              </h2>
+              <Link
+                href={`/admin/clients/${order.user_id}`}
+                className="text-sm font-medium text-ink underline underline-offset-4"
+              >
+                Voir la fiche client
+              </Link>
+            </div>
             <dl className="mt-4 grid gap-5 text-sm sm:grid-cols-2">
               <div>
                 <dt className="text-xs font-semibold uppercase tracking-wide text-ink-soft">

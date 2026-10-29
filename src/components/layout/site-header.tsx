@@ -138,7 +138,7 @@ export function SiteHeader({
             aria-label="Retour à l'accueil"
             className="font-display text-2xl text-ink"
           >
-            Pâtisserie
+            Asher Regal
           </Link>
 
           <nav

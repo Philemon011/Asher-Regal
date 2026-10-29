@@ -26,7 +26,7 @@ const pinkSunset = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Pâtisserie",
+  title: "Asher Regal",
   description: "Des gâteaux faits maison, commandés en ligne.",
 };
 
