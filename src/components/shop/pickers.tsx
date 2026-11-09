@@ -1,5 +1,5 @@
 "use client";
-
+import { formatPrice } from "@/lib/catalog";
 import {
   forwardRef,
   useId,
@@ -15,9 +15,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  MapPin,
   type LucideIcon,
 } from "lucide-react";
-import { TIME_SLOTS, todayInShopTimezone } from "@/lib/schemas/checkout";
+import { todayInShopTimezone } from "@/lib/schemas/checkout";
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
@@ -160,152 +161,187 @@ const PickerShell = forwardRef<HTMLButtonElement, ShellProps>(
   }
 );
 
-export const DatePicker = forwardRef<HTMLButtonElement, PickerProps>(
-  function DatePicker({ id, value, onChange, onBlur, hasError = false }, ref) {
-    const today = todayInShopTimezone();
-    const [view, setView] = useState(() => {
-      const { year, month } = fromIso(value || today);
-      return { year, month };
+export const DatePicker = forwardRef<
+  HTMLButtonElement,
+  PickerProps & { minDate: string; closedWeekdays: number[] }
+>(function DatePicker(
+  { id, value, onChange, onBlur, hasError = false, minDate, closedWeekdays },
+  ref
+) {
+  const today = todayInShopTimezone();
+  const [view, setView] = useState(() => {
+    const { year, month } = fromIso(value || minDate);
+    return { year, month };
+  });
+
+  const cells = useMemo(() => {
+    const first = new Date(Date.UTC(view.year, view.month, 1));
+    const offset = (first.getUTCDay() + 6) % 7; // semaine qui commence le lundi
+    const count = new Date(Date.UTC(view.year, view.month + 1, 0)).getUTCDate();
+    return [
+      ...new Array<null>(offset).fill(null),
+      ...Array.from({ length: count }, (_, i) => i + 1),
+    ];
+  }, [view]);
+
+  const earliest = fromIso(minDate);
+  const atMinMonth =
+    view.year === earliest.year && view.month === earliest.month;
+
+  function shift(delta: number) {
+    setView(({ year, month }) => {
+      const next = new Date(Date.UTC(year, month + delta, 1));
+      return { year: next.getUTCFullYear(), month: next.getUTCMonth() };
     });
+  }
 
-    const cells = useMemo(() => {
-      const first = new Date(Date.UTC(view.year, view.month, 1));
-      const offset = (first.getUTCDay() + 6) % 7; // semaine qui commence le lundi
-      const count = new Date(
-        Date.UTC(view.year, view.month + 1, 0)
-      ).getUTCDate();
-      return [
-        ...new Array<null>(offset).fill(null),
-        ...Array.from({ length: count }, (_, i) => i + 1),
-      ];
-    }, [view]);
+  return (
+    <PickerShell
+      ref={ref}
+      id={id}
+      icon={CalendarDays}
+      label={value ? shortFormatter.format(asDate(value)) : null}
+      placeholder="Choisir une date"
+      hasError={hasError}
+      onOpen={() => {
+        const { year, month } = fromIso(value || minDate);
+        setView({ year, month });
+      }}
+      onClose={onBlur}
+    >
+      {(close) => (
+        <div role="group" aria-label="Choisir une date">
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => shift(-1)}
+              disabled={atMinMonth}
+              aria-label="Mois précédent"
+              className="grid size-10 place-items-center rounded-full text-ink transition-colors hover:bg-rose disabled:opacity-30 disabled:hover:bg-transparent"
+            >
+              <ChevronLeft className="size-5" aria-hidden="true" />
+            </button>
 
-    const current = fromIso(today);
-    const atMinMonth =
-      view.year === current.year && view.month === current.month;
+            <p
+              aria-live="polite"
+              className="font-display text-lg capitalize text-ink"
+            >
+              {monthFormatter.format(
+                new Date(Date.UTC(view.year, view.month, 1))
+              )}
+            </p>
 
-    function shift(delta: number) {
-      setView(({ year, month }) => {
-        const next = new Date(Date.UTC(year, month + delta, 1));
-        return { year: next.getUTCFullYear(), month: next.getUTCMonth() };
-      });
-    }
+            <button
+              type="button"
+              onClick={() => shift(1)}
+              aria-label="Mois suivant"
+              className="grid size-10 place-items-center rounded-full text-ink transition-colors hover:bg-rose"
+            >
+              <ChevronRight className="size-5" aria-hidden="true" />
+            </button>
+          </div>
 
-    return (
-      <PickerShell
-        ref={ref}
-        id={id}
-        icon={CalendarDays}
-        label={value ? shortFormatter.format(asDate(value)) : null}
-        placeholder="Choisir une date"
-        hasError={hasError}
-        onOpen={() => {
-          const { year, month } = fromIso(value || todayInShopTimezone());
-          setView({ year, month });
-        }}
-        onClose={onBlur}
-      >
-        {(close) => (
-          <div role="group" aria-label="Choisir une date">
-            <div className="flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => shift(-1)}
-                disabled={atMinMonth}
-                aria-label="Mois précédent"
-                className="grid size-10 place-items-center rounded-full text-ink transition-colors hover:bg-rose disabled:opacity-30 disabled:hover:bg-transparent"
+          <div className="mt-3 grid grid-cols-7 gap-1 text-center">
+            {WEEKDAYS.map((day) => (
+              <span
+                key={day}
+                className="py-1 text-[11px] font-medium uppercase tracking-wide text-ink-soft"
               >
-                <ChevronLeft className="size-5" aria-hidden="true" />
-              </button>
+                {day}
+              </span>
+            ))}
 
-              <p
-                aria-live="polite"
-                className="font-display text-lg capitalize text-ink"
-              >
-                {monthFormatter.format(
-                  new Date(Date.UTC(view.year, view.month, 1))
-                )}
-              </p>
+            {cells.map((day, index) => {
+              if (day === null) return <span key={`empty-${index}`} />;
 
-              <button
-                type="button"
-                onClick={() => shift(1)}
-                aria-label="Mois suivant"
-                className="grid size-10 place-items-center rounded-full text-ink transition-colors hover:bg-rose"
-              >
-                <ChevronRight className="size-5" aria-hidden="true" />
-              </button>
-            </div>
+              const iso = toIso(view.year, view.month, day);
+              const weekday =
+                ((new Date(Date.UTC(view.year, view.month, day)).getUTCDay() +
+                  6) %
+                  7) +
+                1;
+              const closed = closedWeekdays.includes(weekday);
+              const tooSoon = iso < minDate;
+              const disabled = tooSoon || closed;
+              const selected = iso === value;
+              const isToday = iso === today;
 
-            <div className="mt-3 grid grid-cols-7 gap-1 text-center">
-              {WEEKDAYS.map((day) => (
-                <span
-                  key={day}
-                  className="py-1 text-[11px] font-medium uppercase tracking-wide text-ink-soft"
+              return (
+                <button
+                  key={iso}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => {
+                    onChange(iso);
+                    close();
+                  }}
+                  aria-label={`${longFormatter.format(asDate(iso))}${
+                    closed ? " : non disponible" : ""
+                  }`}
+                  aria-pressed={selected}
+                  aria-current={isToday ? "date" : undefined}
+                  className={`mx-auto grid size-10 place-items-center rounded-full text-sm transition-colors ${
+                    selected
+                      ? "bg-ink text-cream"
+                      : disabled
+                        ? `cursor-not-allowed text-ink-soft/30 ${
+                            closed ? "line-through" : ""
+                          }`
+                        : "text-ink hover:bg-rose"
+                  } ${isToday && !selected ? "ring-2 ring-accent" : ""}`}
                 >
                   {day}
-                </span>
-              ))}
-
-              {cells.map((day, index) => {
-                if (day === null) return <span key={`empty-${index}`} />;
-
-                const iso = toIso(view.year, view.month, day);
-                const disabled = iso < today;
-                const selected = iso === value;
-                const isToday = iso === today;
-
-                return (
-                  <button
-                    key={iso}
-                    type="button"
-                    disabled={disabled}
-                    onClick={() => {
-                      onChange(iso);
-                      close();
-                    }}
-                    aria-label={longFormatter.format(asDate(iso))}
-                    aria-pressed={selected}
-                    aria-current={isToday ? "date" : undefined}
-                    className={`mx-auto grid size-10 place-items-center rounded-full text-sm transition-colors ${
-                      selected
-                        ? "bg-ink text-cream"
-                        : disabled
-                          ? "cursor-not-allowed text-ink-soft/30"
-                          : "text-ink hover:bg-rose"
-                    } ${isToday && !selected ? "ring-2 ring-accent" : ""}`}
-                  >
-                    {day}
-                  </button>
-                );
-              })}
-            </div>
+                </button>
+              );
+            })}
           </div>
-        )}
-      </PickerShell>
-    );
-  }
-);
 
-export const TimePicker = forwardRef<HTMLButtonElement, PickerProps>(
-  function TimePicker({ id, value, onChange, onBlur, hasError = false }, ref) {
-    return (
-      <PickerShell
-        ref={ref}
-        id={id}
-        icon={Clock}
-        label={value || null}
-        placeholder="Choisir une heure"
-        hasError={hasError}
-        onClose={onBlur}
-      >
-        {(close) => (
+          {closedWeekdays.length > 0 && (
+            <p className="mt-3 text-xs text-ink-soft">
+              Les jours barrés ne sont pas disponibles.
+            </p>
+          )}
+        </div>
+      )}
+    </PickerShell>
+  );
+});
+
+export const TimePicker = forwardRef<
+  HTMLButtonElement,
+  PickerProps & { slots: string[]; emptyMessage?: string }
+>(function TimePicker(
+  {
+    id,
+    value,
+    onChange,
+    onBlur,
+    hasError = false,
+    slots,
+    emptyMessage = "Aucun créneau disponible.",
+  },
+  ref
+) {
+  return (
+    <PickerShell
+      ref={ref}
+      id={id}
+      icon={Clock}
+      label={value || null}
+      placeholder="Choisir une heure"
+      hasError={hasError}
+      onClose={onBlur}
+    >
+      {(close) =>
+        slots.length === 0 ? (
+          <p className="p-2 text-sm text-ink-soft">{emptyMessage}</p>
+        ) : (
           <div
             role="group"
             aria-label="Choisir une heure"
             className="grid max-h-72 grid-cols-3 gap-2 overflow-y-auto p-1 sm:grid-cols-4"
           >
-            {TIME_SLOTS.map((slot) => {
+            {slots.map((slot) => {
               const selected = slot === value;
               return (
                 <button
@@ -327,8 +363,66 @@ export const TimePicker = forwardRef<HTMLButtonElement, PickerProps>(
               );
             })}
           </div>
-        )}
-      </PickerShell>
-    );
-  }
-);
+        )
+      }
+    </PickerShell>
+  );
+});
+
+
+type ZoneOption = { id: string; name: string; fee: number };
+
+const feeLabel = (fee: number) => (fee === 0 ? "Gratuit" : formatPrice(fee));
+
+export const ZonePicker = forwardRef<
+  HTMLButtonElement,
+  PickerProps & { zones: ZoneOption[] }
+>(function ZonePicker(
+  { id, value, onChange, onBlur, hasError = false, zones },
+  ref
+) {
+  const selected = zones.find((zone) => zone.id === value);
+
+  return (
+    <PickerShell
+      ref={ref}
+      id={id}
+      icon={MapPin}
+      label={selected ? `${selected.name} · ${feeLabel(selected.fee)}` : null}
+      placeholder="Choisir votre zone"
+      hasError={hasError}
+      onClose={onBlur}
+    >
+      {(close) => (
+        <ul
+          aria-label="Zones de livraison"
+          className="max-h-72 space-y-1 overflow-y-auto p-1"
+        >
+          {zones.map((zone) => {
+            const isSelected = zone.id === value;
+            return (
+              <li key={zone.id}>
+                <button
+                  type="button"
+                  aria-pressed={isSelected}
+                  onClick={() => {
+                    onChange(zone.id);
+                    close();
+                  }}
+                  className={`flex w-full items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left text-sm transition-colors ${
+                    isSelected
+                      ? "border-ink bg-ink text-cream"
+                      : "border-line text-ink hover:bg-rose"
+                  }`}
+                >
+                  <span className="font-medium">{zone.name}</span>
+                  <span className="whitespace-nowrap">{feeLabel(zone.fee)}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </PickerShell>
+  );
+});

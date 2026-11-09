@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Banknote, TriangleAlert } from "lucide-react";
+import { PickupSettingsForm } from "@/components/admin/pickup-settings-form";
 import { ZoneCreateForm } from "@/components/admin/zone-create-form";
 import { ZoneRow } from "@/components/admin/zone-row";
 import { requireAdmin } from "@/lib/auth/require-admin";
@@ -17,19 +18,31 @@ type ZoneData = {
 export default async function AdminDeliveryPage() {
   const { supabase } = await requireAdmin("/admin/livraison");
 
-  const { data, error } = await supabase
-    .from("delivery_zones")
-    .select("id, name, fee, position, is_active")
-    .order("position", { ascending: true })
-    .order("created_at", { ascending: true });
+  const [zonesResult, settingsResult] = await Promise.all([
+    supabase
+      .from("delivery_zones")
+      .select("id, name, fee, position, is_active")
+      .order("position", { ascending: true })
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("shop_settings")
+      .select("pickup_enabled, pickup_instructions")
+      .eq("id", true)
+      .maybeSingle(),
+  ]);
 
-  if (error) {
-    console.error("Zones de livraison : lecture impossible :", error.code);
-    throw new Error("Zones indisponibles");
+  if (zonesResult.error || settingsResult.error) {
+    console.error(
+      "Livraison : lecture impossible :",
+      zonesResult.error?.code ?? settingsResult.error?.code
+    );
+    throw new Error("Livraison indisponible");
   }
 
-  const zones = (data ?? []) as ZoneData[];
+  const zones = (zonesResult.data ?? []) as ZoneData[];
   const activeCount = zones.filter((zone) => zone.is_active).length;
+  const pickupEnabled = settingsResult.data?.pickup_enabled ?? false;
+  const pickupInstructions = settingsResult.data?.pickup_instructions ?? "";
 
   return (
     <div className="max-w-4xl">
@@ -45,20 +58,36 @@ export default async function AdminDeliveryPage() {
         </p>
       </div>
 
-      {activeCount === 0 && (
+      {activeCount === 0 && !pickupEnabled && (
         <div
           role="alert"
           className="mt-4 flex gap-3 rounded-3xl bg-vanilla/80 p-5 text-sm text-ink"
         >
           <TriangleAlert className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
           <p>
-            Aucune zone active : la livraison sera indisponible au moment de
-            commander.
+            Aucune zone active et le retrait est désactivé : les clients ne
+            pourront pas commander.
           </p>
         </div>
       )}
 
       <section className="mt-6 rounded-3xl border border-line bg-surface p-6">
+        <h2 className="text-lg font-semibold text-ink">Retrait sur place</h2>
+        <div className="mt-4">
+          <PickupSettingsForm
+            initial={{
+              enabled: pickupEnabled,
+              instructions: pickupInstructions,
+            }}
+          />
+        </div>
+      </section>
+
+      <h2 className="mt-10 text-lg font-semibold text-ink">
+        Zones de livraison
+      </h2>
+
+      <section className="mt-4 rounded-3xl border border-line bg-surface p-6">
         <ZoneCreateForm />
       </section>
 

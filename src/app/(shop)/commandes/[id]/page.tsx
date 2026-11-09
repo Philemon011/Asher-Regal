@@ -29,7 +29,9 @@ type OrderRow = {
   scheduled_for: string | null;
   subtotal: number;
   discount: number;
-  delivery_fee: number;
+  fulfillment: "delivery" | "pickup";
+  delivery_zone_name: string | null;
+  delivery_fee_due: number;
   total: number;
   order_items: {
     product_name: string;
@@ -66,7 +68,7 @@ export default async function OrderConfirmationPage({
   const { data } = await supabase
     .from("orders")
     .select(
-      "id, order_number, status, first_name, last_name, phone, address, notes, is_gift, gift_message, scheduled_for, subtotal, discount, delivery_fee, total, order_items(product_name, unit_price, quantity, line_total)"
+      "id, order_number, status, first_name, last_name, phone, address, notes, is_gift, gift_message, scheduled_for, subtotal, discount, total, fulfillment, delivery_zone_name, delivery_fee_due, order_items(product_name, unit_price, quantity, line_total)"
     )
     .eq("id", id)
     .maybeSingle();
@@ -135,14 +137,7 @@ export default async function OrderConfirmationPage({
                 </dd>
               </div>
             )}
-            {order.delivery_fee > 0 && (
-              <div className="flex justify-between gap-4">
-                <dt className="text-ink-soft">Frais</dt>
-                <dd className="whitespace-nowrap text-ink">
-                  {formatPrice(order.delivery_fee)}
-                </dd>
-              </div>
-            )}
+           
             <div className="flex items-end justify-between gap-4">
               <dt className="text-ink-soft">Total</dt>
               <dd className="whitespace-nowrap font-display text-3xl text-ink">
@@ -166,12 +161,14 @@ export default async function OrderConfirmationPage({
               </dt>
               <dd className="mt-1 text-ink">{order.phone}</dd>
             </div>
-            <div className="sm:col-span-2">
+                        <div className="sm:col-span-2">
               <dt className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-                Adresse
+                {order.fulfillment === "pickup" ? "Réception" : "Adresse"}
               </dt>
               <dd className="mt-1 whitespace-pre-line text-ink">
-                {order.address}
+                {order.fulfillment === "pickup"
+                  ? "Retrait sur place"
+                  : order.address}
               </dd>
             </div>
             <div>
@@ -205,6 +202,15 @@ export default async function OrderConfirmationPage({
               </div>
             )}
           </dl>
+
+                    {order.fulfillment === "delivery" && order.delivery_fee_due > 0 && (
+            <p className="mt-6 rounded-2xl bg-lavender/60 p-4 text-sm text-ink">
+              Livraison ({order.delivery_zone_name}) :{" "}
+              <strong>{formatPrice(order.delivery_fee_due)}</strong> à remettre
+              en espèces au livreur. Ce prix n&apos;est pas inclus dans le
+              total ci-dessus.
+            </p>
+          )}
         </div>
 
         {/* TEMPORAIRE : à remplacer par le vrai paiement (FedaPay ou KKiaPay). */}

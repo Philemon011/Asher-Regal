@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import {
   Controller,
   useForm,
@@ -15,22 +16,30 @@ import {
   CalendarClock,
   Gift,
   LoaderCircle,
+  MapPin,
+  Store,
   type LucideIcon,
 } from "lucide-react";
+import { createOrder } from "@/app/(shop)/commander/actions";
 import {
   GIFT_MESSAGE_MAX,
-  checkoutSchema,
+  createCheckoutSchema,
   type CheckoutValues,
+  type Schedule,
 } from "@/lib/schemas/checkout";
+import {
+  earliestReception,
+  formatLeadTime,
+  slotMinutes,
+} from "@/lib/schemas/schedule";
 import { formatPrice, type Product } from "@/lib/catalog";
-import { useCartSummary } from "@/stores/use-cart-summary";
-import { DatePicker, TimePicker } from "@/components/shop/pickers";
-
-import { useRouter } from "next/navigation";
-import { createOrder } from "@/app/(shop)/commander/actions";
 import { useCartStore } from "@/stores/cart-store";
+import { useCartSummary } from "@/stores/use-cart-summary";
+import { DatePicker, TimePicker, ZonePicker } from "@/components/shop/pickers";
 
 const ease = [0.22, 1, 0.36, 1] as const;
+
+type Zone = { id: string; name: string; fee: number };
 
 const base =
   "w-full rounded-2xl border bg-surface px-4 text-base text-ink outline-none transition placeholder:text-ink-soft/50 focus:border-ink focus:ring-4 focus:ring-accent/30";
@@ -58,7 +67,7 @@ function Field({
     <div>
       <label
         htmlFor={htmlFor}
-        className="mb-2 block text-xs font-semibold uppercase tracking-normal text-ink"
+        className="mb-2 block text-xs font-semibold uppercase tracking-wide text-ink"
       >
         {label}
       </label>
@@ -97,6 +106,42 @@ function ToggleCard({
       <span
         aria-hidden="true"
         className="relative h-7 w-12 shrink-0 rounded-full bg-line transition-colors after:absolute after:left-1 after:top-1 after:size-5 after:rounded-full after:bg-surface after:shadow after:transition-transform after:content-[''] peer-checked:bg-ink peer-checked:after:translate-x-5"
+      />
+    </label>
+  );
+}
+
+function ChoiceCard({
+  icon: Icon,
+  title,
+  description,
+  value,
+  registration,
+}: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  value: string;
+  registration: UseFormRegisterReturn;
+}) {
+  return (
+    <label className="flex cursor-pointer items-start gap-4 rounded-2xl border border-line bg-surface p-4 transition-colors has-[:checked]:border-ink has-[:checked]:bg-rose/40 has-[:focus-visible]:ring-4 has-[:focus-visible]:ring-accent/40">
+      <input
+        type="radio"
+        value={value}
+        className="peer sr-only"
+        {...registration}
+      />
+      <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-rose text-ink">
+        <Icon className="size-5" aria-hidden="true" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-display text-base text-ink">{title}</span>
+        <span className="mt-0.5 block text-xs text-ink-soft">{description}</span>
+      </span>
+      <span
+        aria-hidden="true"
+        className="mt-1 grid size-5 shrink-0 place-items-center rounded-full border-2 border-line transition-colors peer-checked:border-ink peer-checked:after:size-2.5 peer-checked:after:rounded-full peer-checked:after:bg-ink peer-checked:after:content-['']"
       />
     </label>
   );
@@ -172,23 +217,56 @@ function EmptyState() {
   );
 }
 
-export function CheckoutForm({ products }: { products: Product[] }) {
+function Unavailable() {
+  return (
+    <div className="mx-auto mt-12 max-w-md rounded-3xl bg-vanilla/80 px-6 py-14 text-center">
+      <h2 className="font-display text-2xl uppercase text-ink">
+        Commande momentanément indisponible
+      </h2>
+      <p className="mt-3 text-sm text-ink-soft">
+        Aucun mode de réception n&apos;est disponible pour le moment. Votre
+        panier est conservé, repassez nous voir très vite.
+      </p>
+    </div>
+  );
+}
+
+export function CheckoutForm({
+  products,
+  zones,
+  pickup,
+  schedule,
+}: {
+  products: Product[];
+  zones: Zone[];
+  pickup: { instructions: string } | null;
+  schedule: Schedule;
+}) {
   const { hydrated, count, total } = useCartSummary(products);
-    const router = useRouter();
+  const router = useRouter();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [unavailable, setUnavailable] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
 
+  const hasDelivery = zones.length > 0;
+  const hasPickup = pickup !== null;
+
+  const schema = useMemo(() => createCheckoutSchema(schedule), [schedule]);
+  const mustSchedule = schedule.minLeadHours > 0;
+  const earliest = useMemo(
+    () => earliestReception(schedule.minLeadHours),
+    [schedule.minLeadHours]
+  );
+
   const {
-    register,
-    control,
-    handleSubmit,
-    watch,
+    register, control, handleSubmit, watch, getValues, setValue,
     formState: { errors, isSubmitting },
   } = useForm<CheckoutValues>({
-    resolver: zodResolver(checkoutSchema),
+    resolver: zodResolver(schema),
     mode: "onTouched",
     defaultValues: {
+      fulfillment: hasDelivery ? "delivery" : "pickup",
+      zoneId: "",
       firstName: "",
       lastName: "",
       phone: "",
@@ -196,17 +274,33 @@ export function CheckoutForm({ products }: { products: Product[] }) {
       notes: "",
       isGift: false,
       giftMessage: "",
-      receiveLater: false,
+      receiveLater: schedule.minLeadHours > 0,
       date: "",
       time: "",
     },
   });
 
+  const fulfillment = watch("fulfillment");
+  const zoneId = watch("zoneId");
   const isGift = watch("isGift");
   const receiveLater = watch("receiveLater");
   const giftLength = watch("giftMessage").length;
 
-    async function onSubmit(values: CheckoutValues) {
+  const selectedZone = zones.find((zone) => zone.id === zoneId);
+
+  const selectedDate = watch("date");
+
+  // Créneaux disponibles pour une date (on retire ceux qui sont trop proches).
+  function slotsFor(date: string) {
+    if (date === earliest.isoDate) {
+      return schedule.slots.filter(
+        (slot) => slotMinutes(slot) >= earliest.minutes
+      );
+    }
+    return schedule.slots;
+  }
+
+  async function onSubmit(values: CheckoutValues) {
     setSubmitError(null);
     setUnavailable(false);
 
@@ -235,9 +329,24 @@ export function CheckoutForm({ products }: { products: Product[] }) {
         setUnavailable(true);
         setSubmitError("Un des gâteaux de votre panier n'est plus disponible.");
         return;
+      case "zone":
+        setSubmitError(
+          "Cette zone de livraison n'est plus disponible. Rechargez la page et choisissez-en une autre."
+        );
+        return;
+      case "pickup":
+        setSubmitError(
+          "Le retrait sur place n'est plus disponible. Rechargez la page."
+        );
+        return;
       case "too_many":
         setSubmitError(
           "Vous avez déjà plusieurs commandes en attente de paiement. Réglez-les d'abord, ou réessayez demain."
+        );
+        return;
+      case "schedule":
+        setSubmitError(
+          "Cette date ou cette heure n'est plus disponible. Choisissez-en une autre."
         );
         return;
       case "invalid":
@@ -255,25 +364,45 @@ export function CheckoutForm({ products }: { products: Product[] }) {
   if (redirecting) return <Processing />;
   if (!hydrated) return <Skeleton />;
   if (count === 0) return <EmptyState />;
+  if (!hasDelivery && !hasPickup) return <Unavailable />;
 
   return (
     <MotionConfig reducedMotion="user">
       <div className="mx-auto mt-10 max-w-xl">
-        <div className="flex items-center justify-between gap-4 rounded-2xl bg-rose/50 px-5 py-4">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-normal text-ink-soft">
-              {count} gâteau{count > 1 ? "x" : ""}
-            </p>
-            <p className="whitespace-nowrap font-display text-xl text-ink">
-              {formatPrice(total)}
-            </p>
+        <div className="rounded-2xl bg-rose/50 px-5 py-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.18em] text-ink-soft">
+                {count} gâteau{count > 1 ? "x" : ""} · à payer en ligne
+              </p>
+              <p className="whitespace-nowrap font-display text-xl text-ink">
+                {formatPrice(total)}
+              </p>
+            </div>
+            <Link
+              href="/commander/recapitulatif"
+              className="text-sm font-medium text-ink underline underline-offset-4"
+            >
+              Modifier
+            </Link>
           </div>
-          <Link
-            href="/commander/recapitulatif"
-            className="text-sm font-medium text-ink underline underline-offset-4"
-          >
-            Modifier
-          </Link>
+
+          {fulfillment === "delivery" && selectedZone && (
+            <p className="mt-3 border-t border-ink/10 pt-3 text-sm text-ink">
+              + Livraison ({selectedZone.name}) :{" "}
+              <strong>
+                {selectedZone.fee === 0
+                  ? "gratuite"
+                  : formatPrice(selectedZone.fee)}
+              </strong>
+              {selectedZone.fee > 0 && " à remettre au livreur"}
+            </p>
+          )}
+          {fulfillment === "pickup" && (
+            <p className="mt-3 border-t border-ink/10 pt-3 text-sm text-ink">
+              Retrait sur place : <strong>gratuit</strong>
+            </p>
+          )}
         </div>
 
         <form
@@ -281,8 +410,84 @@ export function CheckoutForm({ products }: { products: Product[] }) {
           noValidate
           className="mt-8 space-y-6"
         >
+          {/* Comment recevoir la commande */}
           <fieldset>
-            <legend className="mb-2 block text-xs font-semibold uppercase tracking-normal text-ink">
+            <legend className="mb-2 block text-xs font-semibold uppercase tracking-wide text-ink">
+              Comment souhaitez-vous la recevoir ?
+            </legend>
+
+            {hasDelivery && hasPickup ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <ChoiceCard
+                  icon={MapPin}
+                  value="delivery"
+                  title="Livraison"
+                  description="Un livreur vous l'apporte. Son prix se règle en espèces."
+                  registration={register("fulfillment")}
+                />
+                <ChoiceCard
+                  icon={Store}
+                  value="pickup"
+                  title="Retrait sur place"
+                  description="Gratuit. Vous venez la récupérer."
+                  registration={register("fulfillment")}
+                />
+              </div>
+            ) : (
+              <>
+                <input type="hidden" {...register("fulfillment")} />
+                <p className="rounded-2xl border border-line bg-surface p-4 text-sm text-ink">
+                  {hasDelivery
+                    ? "Livraison : le prix de la livraison se règle en espèces au livreur."
+                    : "Retrait sur place, gratuit."}
+                </p>
+              </>
+            )}
+          </fieldset>
+
+          {fulfillment === "delivery" ? (
+            <>
+              <Field
+                label="Zone de livraison"
+                htmlFor="zoneId"
+                error={errors.zoneId}
+              >
+                <Controller
+                  control={control}
+                  name="zoneId"
+                  render={({ field }) => (
+                    <ZonePicker
+                      id="zoneId"
+                      ref={field.ref}
+                      value={field.value}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      hasError={!!errors.zoneId}
+                      zones={zones}
+                    />
+                  )}
+                />
+              </Field>
+
+              {selectedZone && (
+                <p className="-mt-2 rounded-2xl bg-lavender/60 p-4 text-sm text-ink">
+                  {selectedZone.fee === 0
+                    ? "La livraison est gratuite pour cette zone."
+                    : `Le prix de la livraison (${formatPrice(
+                      selectedZone.fee
+                    )}) se règle en espèces au livreur. Il n'est pas inclus dans le paiement en ligne.`}
+                </p>
+              )}
+            </>
+          ) : (
+            <div className="rounded-2xl bg-vanilla/80 p-4 text-sm text-ink">
+              <p className="font-semibold">Où retirer votre commande</p>
+              <p className="mt-1 whitespace-pre-line">{pickup?.instructions}</p>
+            </div>
+          )}
+
+          <fieldset>
+            <legend className="mb-2 block text-xs font-semibold uppercase tracking-wide text-ink">
               Commande au nom de
             </legend>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -348,23 +553,25 @@ export function CheckoutForm({ products }: { products: Product[] }) {
             />
           </Field>
 
-          <Field
-            label="Adresse"
-            htmlFor="address"
-            error={errors.address}
-            hint="Quartier, rue, repère connu : le plus précis possible."
-          >
-            <textarea
-              id="address"
-              rows={3}
-              autoComplete="street-address"
-              placeholder="Adresse détaillée"
-              maxLength={300}
-              aria-invalid={!!errors.address}
-              className={areaClass(errors.address)}
-              {...register("address")}
-            />
-          </Field>
+          {fulfillment === "delivery" && (
+            <Field
+              label="Adresse"
+              htmlFor="address"
+              error={errors.address}
+              hint="Quartier, rue, repère connu : le plus précis possible."
+            >
+              <textarea
+                id="address"
+                rows={3}
+                autoComplete="street-address"
+                placeholder="Adresse détaillée"
+                maxLength={300}
+                aria-invalid={!!errors.address}
+                className={areaClass(errors.address)}
+                {...register("address")}
+              />
+            </Field>
+          )}
 
           <Field label="Notes (facultatif)" htmlFor="notes" error={errors.notes}>
             <textarea
@@ -407,14 +614,23 @@ export function CheckoutForm({ products }: { products: Product[] }) {
             </Reveal>
           </div>
 
-          <div>
-            <ToggleCard
-              icon={CalendarClock}
-              title="Recevoir plus tard"
-              description="Sinon, nous préparons votre commande dès que possible."
-              registration={register("receiveLater")}
-            />
-            <Reveal show={receiveLater}>
+                    <div>
+            {mustSchedule ? (
+              <p className="rounded-2xl bg-lavender/60 p-4 text-sm text-ink">
+                Nos gâteaux sont préparés sur commande : choisissez la date et
+                l&apos;heure de réception, au moins{" "}
+                {formatLeadTime(schedule.minLeadHours)} à l&apos;avance.
+              </p>
+            ) : (
+              <ToggleCard
+                icon={CalendarClock}
+                title="Recevoir plus tard"
+                description="Sinon, nous préparons votre commande dès que possible."
+                registration={register("receiveLater")}
+              />
+            )}
+
+            <Reveal show={mustSchedule || receiveLater}>
               <Field label="Date" htmlFor="date" error={errors.date}>
                 <Controller
                   control={control}
@@ -424,9 +640,17 @@ export function CheckoutForm({ products }: { products: Product[] }) {
                       id="date"
                       ref={field.ref}
                       value={field.value}
-                      onChange={field.onChange}
+                      onChange={(value) => {
+                        field.onChange(value);
+                        // Si l'heure déjà choisie n'existe pas ce jour-là, on la retire.
+                        if (!slotsFor(value).includes(getValues("time"))) {
+                          setValue("time", "");
+                        }
+                      }}
                       onBlur={field.onBlur}
                       hasError={!!errors.date}
+                      minDate={earliest.isoDate}
+                      closedWeekdays={schedule.closedWeekdays}
                     />
                   )}
                 />
@@ -444,6 +668,12 @@ export function CheckoutForm({ products }: { products: Product[] }) {
                       onChange={field.onChange}
                       onBlur={field.onBlur}
                       hasError={!!errors.time}
+                      slots={selectedDate ? slotsFor(selectedDate) : []}
+                      emptyMessage={
+                        selectedDate
+                          ? "Aucun créneau disponible ce jour-là."
+                          : "Choisissez d'abord une date."
+                      }
                     />
                   )}
                 />
@@ -451,7 +681,7 @@ export function CheckoutForm({ products }: { products: Product[] }) {
             </Reveal>
           </div>
 
-                    {submitError && (
+          {submitError && (
             <div
               role="alert"
               className="rounded-2xl bg-red-50 p-4 text-sm text-red-800"
@@ -494,7 +724,6 @@ export function CheckoutForm({ products }: { products: Product[] }) {
               </>
             )}
           </button>
-
         </form>
       </div>
     </MotionConfig>

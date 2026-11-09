@@ -139,3 +139,46 @@ export async function deleteZone(input: unknown): Promise<ZoneActionResult> {
   refresh();
   return { ok: true };
 }
+
+export type PickupFormState = {
+  error?: string;
+  success?: string;
+  values?: { enabled: boolean; instructions: string };
+} | null;
+
+export async function updatePickupSettings(
+  _previous: PickupFormState,
+  formData: FormData
+): Promise<PickupFormState> {
+  const { supabase } = await requireAdmin("/admin/livraison");
+
+  const enabled = formData.get("pickupEnabled") === "on";
+  const instructions = String(formData.get("pickupInstructions") ?? "")
+    .replace(/\r\n/g, "\n")
+    .trim();
+  const values = { enabled, instructions };
+
+  if (instructions.length > 300) {
+    return { error: "300 caractères maximum pour les consignes.", values };
+  }
+  if (enabled && instructions.length < 5) {
+    return {
+      error: "Indiquez où retirer la commande avant d'activer le retrait.",
+      values,
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("shop_settings")
+    .update({ pickup_enabled: enabled, pickup_instructions: instructions })
+    .eq("id", true)
+    .select("id");
+
+  if (error || !data || data.length === 0) {
+    console.error("Réglage du retrait impossible :", error?.code);
+    return { error: "Impossible d'enregistrer. Réessayez.", values };
+  }
+
+  refresh();
+  return { success: "Enregistré.", values };
+}

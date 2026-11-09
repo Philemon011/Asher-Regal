@@ -34,7 +34,9 @@ type OrderDetail = {
   scheduled_for: string | null;
   subtotal: number;
   discount: number;
-  delivery_fee: number;
+  fulfillment: "delivery" | "pickup";
+  delivery_zone_name: string | null;
+  delivery_fee_due: number;
   total: number;
   paid_at: string | null;
   created_at: string;
@@ -74,7 +76,7 @@ export default async function AdminOrderDetailPage({
   const { data, error } = await supabase
     .from("orders")
     .select(
-      "id, order_number, user_id, status, first_name, last_name, phone, address, notes, is_gift, gift_message, scheduled_for, subtotal, discount, delivery_fee, total, paid_at, created_at, order_items(product_name, unit_price, quantity, line_total), order_status_history(from_status, to_status, changed_by, created_at)"
+      "id, order_number, user_id, status, first_name, last_name, phone, address, notes, is_gift, gift_message, scheduled_for, subtotal, discount, total, fulfillment, delivery_zone_name, delivery_fee_due, paid_at, created_at, order_items(product_name, unit_price, quantity, line_total), order_status_history(from_status, to_status, changed_by, created_at)"
     )
     .eq("id", id)
     .maybeSingle();
@@ -165,14 +167,7 @@ export default async function AdminOrderDetailPage({
                   </dd>
                 </div>
               )}
-              {order.delivery_fee > 0 && (
-                <div className="flex justify-between gap-4">
-                  <dt className="text-ink-soft">Frais</dt>
-                  <dd className="whitespace-nowrap text-ink">
-                    {formatPrice(order.delivery_fee)}
-                  </dd>
-                </div>
-              )}
+              
               <div className="flex items-end justify-between gap-4 pt-1">
                 <dt className="font-medium text-ink">Total</dt>
                 <dd className="whitespace-nowrap text-2xl font-semibold text-ink">
@@ -180,6 +175,37 @@ export default async function AdminOrderDetailPage({
                 </dd>
               </div>
             </dl>
+          </section>
+
+                    <section
+            className={`rounded-3xl p-6 ${
+              order.fulfillment === "pickup" ? "bg-sage/70" : "bg-peach/70"
+            }`}
+          >
+            {order.fulfillment === "pickup" ? (
+              <>
+                <h2 className="text-sm font-semibold text-ink">
+                  Retrait sur place
+                </h2>
+                <p className="mt-1 text-ink">Aucun frais de livraison.</p>
+              </>
+            ) : (
+              <>
+                <h2 className="text-sm font-semibold text-ink">
+                  À encaisser à la livraison
+                </h2>
+                <p className="mt-1 text-2xl font-semibold text-ink">
+                  {order.delivery_fee_due === 0
+                    ? "Livraison gratuite"
+                    : formatPrice(order.delivery_fee_due)}
+                </p>
+                <p className="mt-1 text-sm text-ink">
+                  Zone : {order.delivery_zone_name}. Ce montant est remis en
+                  espèces au livreur, il n&apos;est pas dans le total payé en
+                  ligne.
+                </p>
+              </>
+            )}
           </section>
 
           <section className="rounded-3xl border border-line bg-surface p-6">
@@ -217,12 +243,14 @@ export default async function AdminOrderDetailPage({
                   </a>
                 </dd>
               </div>
-              <div className="sm:col-span-2">
+                            <div className="sm:col-span-2">
                 <dt className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-                  Adresse
+                  {order.fulfillment === "pickup" ? "Réception" : "Adresse"}
                 </dt>
                 <dd className="mt-1 whitespace-pre-line text-ink">
-                  {order.address}
+                  {order.fulfillment === "pickup"
+                    ? "Retrait sur place"
+                    : order.address}
                 </dd>
               </div>
               <div className="sm:col-span-2">

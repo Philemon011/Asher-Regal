@@ -37,7 +37,7 @@ const NAV: NavItem[] = [
   { href: "/admin/livraison", label: "Livraison", icon: Truck, ready: true },
   { href: "/admin/clients", label: "Clients", icon: Users, ready: true },
   { href: "/admin/reclamations", label: "Réclamations", icon: LifeBuoy, ready: false },
-  { href: "/admin/reglages", label: "Réglages", icon: Settings, ready: false },
+    { href: "/admin/reglages", label: "Réglages", icon: Settings, ready: true },
 ];
 
 function Brand() {

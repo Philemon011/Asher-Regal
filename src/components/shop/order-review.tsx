@@ -203,7 +203,8 @@ export function OrderReview({ products }: { products: Product[] }) {
                     </div>
 
                     <p className="mt-2 text-right text-xs text-ink-soft">
-                        Les éventuels frais vous seront précisés avant le paiement.
+                                    Le prix de la livraison, selon votre zone, se règle en espèces au
+            livreur : il n&apos;est pas inclus dans ce total.
                     </p>
 
                     <div className="mt-5 flex items-center gap-3 rounded-2xl bg-lavender/60 p-4 text-sm text-ink">
